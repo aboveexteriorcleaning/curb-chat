@@ -2,145 +2,149 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Curb Appeal AI Chat</title>
+  <title>Curb Appeal AI Assistant</title>
   <style>
     body {
-      font-family: sans-serif;
-      background: #f7f7f7;
+      font-family: Arial, sans-serif;
+      background: #f9f9f9;
       margin: 0;
-      padding: 2rem;
+      padding: 0;
     }
-    #chat {
+    .chat-container {
       max-width: 600px;
-      margin: 0 auto;
+      margin: 50px auto;
       background: white;
       border-radius: 10px;
-      padding: 1rem;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      padding: 20px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
     }
     .message {
-      padding: 0.5rem;
-      margin-bottom: 0.25rem;
-      border-radius: 6px;
+      padding: 10px;
+      margin: 5px 0;
+      border-radius: 5px;
     }
     .bot {
       background: #eee;
     }
     .user {
-      background: #cceeff;
+      background: #cdefff;
       text-align: right;
     }
-    .input-row {
+    .markdown {
+      white-space: pre-wrap;
+    }
+    .input-area {
       display: flex;
-      margin-top: 1rem;
+      margin-top: 10px;
     }
-    input[type="text"] {
+    .input-area input[type="text"] {
       flex: 1;
-      padding: 0.5rem;
+      padding: 10px;
+      border-radius: 5px 0 0 5px;
       border: 1px solid #ccc;
-      border-radius: 4px 0 0 4px;
     }
-    button {
-      padding: 0.5rem 1rem;
+    .input-area button {
+      padding: 10px 15px;
       border: none;
-      background: #00aaff;
+      background: #25a4e3;
       color: white;
-      border-radius: 0 4px 4px 0;
       cursor: pointer;
+      border-radius: 0 5px 5px 0;
     }
     input[type="file"] {
-      margin-top: 0.5rem;
+      margin-top: 10px;
     }
   </style>
 </head>
 <body>
-  <div id="chat">
-    <div id="chatbox"></div>
-    <div class="input-row">
-      <input id="userInput" type="text" placeholder="Type your message..." />
-      <button onclick="handleUserInput()">Send</button>
+  <div class="chat-container" id="chat">
+    <!-- Chat messages will appear here -->
+  </div>
+
+  <div class="chat-container">
+    <div class="input-area">
+      <input type="text" id="userInput" placeholder="Type your message..." />
+      <button onclick="sendMessage()">Send</button>
     </div>
     <input type="file" id="imageUpload" accept="image/*" multiple />
   </div>
 
   <script>
-    const chatbox = document.getElementById("chatbox");
-    const userInput = document.getElementById("userInput");
-    const imageInput = document.getElementById("imageUpload");
+    const chat = document.getElementById('chat');
+    const input = document.getElementById('userInput');
+    const imageUpload = document.getElementById('imageUpload');
+    let conversation = [];
+    let hasUploaded = false;
 
-    let step = 0;
-    let zip = "";
-    let sqft = "";
-    let area = "";
-
-    function addMessage(text, sender = "bot") {
-      const msg = document.createElement("div");
+    function addMessage(text, sender = 'bot') {
+      const msg = document.createElement('div');
       msg.className = `message ${sender}`;
-      msg.textContent = text;
-      chatbox.appendChild(msg);
-      chatbox.scrollTop = chatbox.scrollHeight;
+      msg.innerHTML = marked.parse(text);
+      chat.appendChild(msg);
+      chat.scrollTop = chat.scrollHeight;
     }
 
-    function handleUserInput() {
-      const input = userInput.value.trim();
-      if (!input) return;
+    async function sendMessage() {
+      const text = input.value.trim();
+      if (!text) return;
 
-      addMessage(input, "user");
-      userInput.value = "";
+      addMessage(text, 'user');
+      conversation.push({ role: 'user', content: text });
+      input.value = '';
 
-      if (step === 0) {
-        addMessage("What parts of your home would you like me to check? (e.g., Roof, Gutters, Siding)");
-        step = 1;
-      } else if (step === 1) {
-        area = input;
-        addMessage("Got it. What's your ZIP code?");
-        step = 2;
-      } else if (step === 2) {
-        zip = input;
-        addMessage("Thanks. Roughly how many square feet is your home?");
-        step = 3;
-      } else if (step === 3) {
-        sqft = input;
-        addMessage("Awesome. You can upload your photo(s) below. Analysis will begin once you upload at least one image.");
-        step = 4;
-      } else if (step === 4) {
-        if (imageInput.files.length === 0) {
-          addMessage("⚠️ Please upload at least one photo before we begin analysis.");
-        } else {
-          analyzeHome();
-        }
+      if (!hasUploaded) {
+        addMessage("📸 Please upload at least one photo of your home before we continue.");
+        return;
       }
-    }
 
-    function analyzeHome() {
       addMessage("🔍 Analyzing your home...");
-      const formData = new FormData();
-      formData.append("zip", zip);
-      formData.append("sqft", sqft);
-      formData.append("area", area);
-      for (let file of imageInput.files) {
-        formData.append("images", file);
-      }
+      const images = [...imageUpload.files].slice(0, 3);
+      const imageUrls = await Promise.all(images.map(uploadImage));
 
-      fetch("https://kaledemaris.app.n8n.cloud/webhook/curb-check-ai", {
+      const res = await fetch("https://kaledemaris.app.n8n.cloud/webhook/curb-check-ai", {
         method: "POST",
-        body: formData
-      })
-        .then(res => res.text())
-        .then(data => {
-          addMessage("✅ Here's your report:");
-          addMessage(data);
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          areas: extractFromConversation("parts of your home"),
+          zip: extractFromConversation("zip"),
+          sqft: extractFromConversation("square feet"),
+          imageUrls
         })
-        .catch(err => {
-          console.error(err);
-          addMessage("⚠️ Something went wrong. Try again later.");
-        });
+      });
+
+      const data = await res.json();
+      const report = typeof data === 'string' ? data : data.report || JSON.stringify(data, null, 2);
+      addMessage("✅ Here's your report:");
+      addMessage(report);
     }
 
-    // Initial greeting
-    addMessage("👋 Hi! I'm your Curb Appeal Assistant. Ready to get started?");
+    function extractFromConversation(key) {
+      const msg = conversation.find(c => c.content.toLowerCase().includes(key));
+      return msg ? msg.content.split(" ").pop().replace(/[^a-zA-Z0-9]/g, '') : '';
+    }
+
+    imageUpload.addEventListener("change", () => {
+      if (imageUpload.files.length > 0) {
+        hasUploaded = true;
+        addMessage("📷 Image(s) uploaded.");
+      }
+    });
+
+    function uploadImage(file) {
+      // Simulate upload
+      return new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.readAsDataURL(file);
+      });
+    }
+
+    // Inject intro message
+    window.onload = () => {
+      addMessage("👋 Hi! I'm your Curb Appeal Assistant. Ready to get started?");
+    };
   </script>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 </body>
 </html>
 
