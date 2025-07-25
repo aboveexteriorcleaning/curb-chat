@@ -134,7 +134,7 @@
 
     function analyzeData() {
       addMessage('🔍 Analyzing your home...');
-      fetch('https://your-n8n-webhook-url', {
+      fetch('https://kaledemaris.app.n8n.cloud/webhook/curb-check-ai', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(userData)
