@@ -2,162 +2,145 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Curb Appeal AI Chat</title>
   <style>
     body {
       font-family: sans-serif;
+      background: #f7f7f7;
       margin: 0;
-      padding: 0;
-      display: flex;
-      justify-content: center;
-      background: #f9f9f9;
-    }
-    .chat-container {
-      width: 100%;
-      max-width: 600px;
-      background: white;
-      margin: 40px auto;
-      padding: 20px;
-      box-shadow: 0 0 10px rgba(0,0,0,0.1);
-      border-radius: 8px;
+      padding: 2rem;
     }
     #chat {
-      height: 400px;
-      overflow-y: auto;
-      margin-bottom: 12px;
+      max-width: 600px;
+      margin: 0 auto;
+      background: white;
+      border-radius: 10px;
+      padding: 1rem;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
     }
     .message {
-      padding: 10px;
+      padding: 0.5rem;
+      margin-bottom: 0.25rem;
       border-radius: 6px;
-      margin-bottom: 8px;
     }
     .bot {
       background: #eee;
     }
     .user {
       background: #cceeff;
-      align-self: flex-end;
+      text-align: right;
     }
-    #inputSection {
+    .input-row {
       display: flex;
-      gap: 8px;
+      margin-top: 1rem;
     }
     input[type="text"] {
       flex: 1;
-      padding: 10px;
-    }
-    input[type="file"] {
-      margin-top: 10px;
+      padding: 0.5rem;
+      border: 1px solid #ccc;
+      border-radius: 4px 0 0 4px;
     }
     button {
-      padding: 10px 16px;
-      background-color: #00bfff;
-      color: white;
+      padding: 0.5rem 1rem;
       border: none;
+      background: #00aaff;
+      color: white;
+      border-radius: 0 4px 4px 0;
       cursor: pointer;
     }
-    button:hover {
-      background-color: #0099cc;
-    }
-    img.preview {
-      max-width: 100px;
-      margin: 6px 6px 0 0;
-      border-radius: 6px;
+    input[type="file"] {
+      margin-top: 0.5rem;
     }
   </style>
 </head>
 <body>
-  <div class="chat-container">
-    <div id="chat"></div>
-    <div id="inputSection">
-      <input type="text" id="userInput" placeholder="Type your message..." />
-      <button onclick="sendMessage()">Send</button>
+  <div id="chat">
+    <div id="chatbox"></div>
+    <div class="input-row">
+      <input id="userInput" type="text" placeholder="Type your message..." />
+      <button onclick="handleUserInput()">Send</button>
     </div>
     <input type="file" id="imageUpload" accept="image/*" multiple />
   </div>
 
   <script>
-    const chat = document.getElementById("chat");
+    const chatbox = document.getElementById("chatbox");
     const userInput = document.getElementById("userInput");
-    const imageUpload = document.getElementById("imageUpload");
+    const imageInput = document.getElementById("imageUpload");
 
-    const userSelections = {
-      zip: "",
-      squareFootage: "",
-      sections: [],
-      imageFiles: []
-    };
+    let step = 0;
+    let zip = "";
+    let sqft = "";
+    let area = "";
 
     function addMessage(text, sender = "bot") {
       const msg = document.createElement("div");
       msg.className = `message ${sender}`;
-      msg.innerText = text;
-      chat.appendChild(msg);
-      scrollToBottom();
+      msg.textContent = text;
+      chatbox.appendChild(msg);
+      chatbox.scrollTop = chatbox.scrollHeight;
     }
 
-    function scrollToBottom() {
-      chat.scrollTop = chat.scrollHeight;
-    }
+    function handleUserInput() {
+      const input = userInput.value.trim();
+      if (!input) return;
 
-    function sendMessage() {
-      const text = userInput.value.trim();
-      if (!text) return;
-
-      addMessage(text, "user");
-      handleUserInput(text);
+      addMessage(input, "user");
       userInput.value = "";
-    }
 
-    function handleUserInput(text) {
-      if (!userSelections.sections.length) {
+      if (step === 0) {
+        addMessage("What parts of your home would you like me to check? (e.g., Roof, Gutters, Siding)");
+        step = 1;
+      } else if (step === 1) {
+        area = input;
         addMessage("Got it. What's your ZIP code?");
-        userSelections.sections.push(text);
-        return;
-      }
-
-      if (!userSelections.zip) {
-        userSelections.zip = text;
+        step = 2;
+      } else if (step === 2) {
+        zip = input;
         addMessage("Thanks. Roughly how many square feet is your home?");
-        return;
-      }
-
-      if (!userSelections.squareFootage) {
-        userSelections.squareFootage = text;
-        addMessage("Awesome. You can upload your photo separately. For now, I'm analyzing your home...");
-
-        // simulate call
-        setTimeout(() => {
-          addMessage("\u26a0\ufe0f Something went wrong. Try again later.");
-        }, 1500);
-
-        return;
+        step = 3;
+      } else if (step === 3) {
+        sqft = input;
+        addMessage("Awesome. You can upload your photo(s) below. Analysis will begin once you upload at least one image.");
+        step = 4;
+      } else if (step === 4) {
+        if (imageInput.files.length === 0) {
+          addMessage("⚠️ Please upload at least one photo before we begin analysis.");
+        } else {
+          analyzeHome();
+        }
       }
     }
 
-    imageUpload.addEventListener("change", async (e) => {
-      const files = Array.from(e.target.files).slice(0, 3);
-      const fileNames = files.map(file => file.name).join(", ");
-
-      addMessage(`\ud83d\udcf7 Uploaded: ${fileNames}`);
-      userSelections.imageFiles = files;
-
-      for (const file of files) {
-        const reader = new FileReader();
-        reader.onload = () => {
-          const img = document.createElement("img");
-          img.src = reader.result;
-          img.className = "preview";
-          chat.appendChild(img);
-          scrollToBottom();
-        };
-        reader.readAsDataURL(file);
+    function analyzeHome() {
+      addMessage("🔍 Analyzing your home...");
+      const formData = new FormData();
+      formData.append("zip", zip);
+      formData.append("sqft", sqft);
+      formData.append("area", area);
+      for (let file of imageInput.files) {
+        formData.append("images", file);
       }
-    });
+
+      fetch("https://kaledemaris.app.n8n.cloud/webhook/curb-check-ai", {
+        method: "POST",
+        body: formData
+      })
+        .then(res => res.text())
+        .then(data => {
+          addMessage("✅ Here's your report:");
+          addMessage(data);
+        })
+        .catch(err => {
+          console.error(err);
+          addMessage("⚠️ Something went wrong. Try again later.");
+        });
+    }
 
     // Initial greeting
-    addMessage("\ud83d\udc4b Hi! I'm your Curb Appeal Assistant. Ready to get started?");
+    addMessage("👋 Hi! I'm your Curb Appeal Assistant. Ready to get started?");
   </script>
 </body>
 </html>
+
